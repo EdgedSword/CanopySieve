@@ -1,0 +1,12 @@
+{
+  "name": "canopysieve-lists",
+  "version": "1.0.0",
+  "description": "Converts ABP filter lists to Apple Content Blocker JSON for CanopySieve",
+  "main": "convert.js",
+  "scripts": {
+    "start": "node convert.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
