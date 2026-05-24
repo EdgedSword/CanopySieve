@@ -1,0 +1,34 @@
+{
+  "EasyList": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "header": ""
+  },
+  "EasyPrivacy": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "header": ""
+  },
+  "Peter Lowe's": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "header": ""
+  },
+  "Fanboy Annoyances": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "header": ""
+  },
+  "AdGuard Mobile Ads": {
+    "hash": "bd12d7030d8257a3a7770e2bf1a96bc0f0d9a34640972fcc4ec139d7a0c7d52d",
+    "header": "! Checksum: PvAz5lRzyVHOLdENhH6/LA\n! Diff-Path: ../patches/11/11-s-1779454887-3600.patch\n! Title: AdGuard Mobile Ads filter\n! Description: Filter for all known mobile ad networks. Useful for mobile devices.\n! TimeUpdated: 2026-05-22T12:58:09+00:00\n! Homepage: https://github.com/AdguardTeam/AdGuardFilters\n! License: https://github.com/AdguardTeam/AdguardFilters/blob/master/LICENSE\n!\n!---------------------------------------------------------------------------!\n!-------------- Advertising networks ---------------------------------------!\n!---------------------------------------------------------------------------!\n!\n! This section contains the list of third-party advertising networks domains for mobile devices.\n! Note, that we only put rules that block full domains here and not URL parts (there's `general_url.txt` for that). Also, it must be domains that are used in a third-party context.\n!\n! Good: ||doubleclick.net^$third-party\n! Bad: /banner.jpg (should be in general_url.txt)\n! Bad: ||adssubdomain.legitwebsite.com^ (should be in adservers_firstparty.txt)\n!\n!\n! ||mobileapptracking.com^ - don't block this domain with all subdomains. https://forum.adguard.com/index.php?threads/23917/\n!\n! https://github.com/AdguardTeam/AdguardFilters/issues/229939"
+  },
+  "AdGuard Browsing Security": {
+    "hash": "47e399b822bf7fe68a083f00108125940e9cc05ef730c0e14eb685d29b0f0c72",
+    "header": "! Checksum: 5NnDJyG5jbYeoA1lT3xeCg\n! Diff-Path: ../patches/9/9-s-1779526225-3600.patch\n! Title: AdGuard Spanish/Portuguese filter\n! Description: Filter list that specifically removes ads on websites in Spanish, Portuguese, and Brazilian Portuguese languages.\n! TimeUpdated: 2026-05-23T08:47:41+00:00\n! Homepage: https://github.com/AdguardTeam/AdGuardFilters\n! License: https://github.com/AdguardTeam/AdguardFilters/blob/master/LICENSE\n!\n!---------------------------------------------------------------------------!\n!---------------------------------------------------------------------------!\n!-------------- Advertising networks ---------------------------------------!\n!---------------------------------------------------------------------------!\n!\n! This section contains the list of third-party advertising networks domains.\n! Note, that we only put rules that block full domains here and not URL parts (there's `general_url.txt` for that). Also, it must be domains that are used in a third-party context.\n!\n! Good: ||doubleclick.net^$third-party\n! Bad: /banner.jpg (should be in general_url.txt)\n! Bad: ||adssubdomain.legitwebsite.com^ (should be in adservers_firstparty.txt)\n!\n!\n! https://forum.adguard.com/index.php?threads/ivoox-com-podcasts-issues.29530/\n! ||addevweb.com^$third-party\n!"
+  },
+  "URLhaus Malware": {
+    "hash": "32d4f8904b8bc3f81ec8b0a659780ddeec0301ef74dcfbd73c3d0ee2894aae3a",
+    "header": "! Title: Online Malicious URL Blocklist\n! Updated: 2026-05-24T00:20:11Z\n! Homepage: https://gitlab.com/malware-filter/urlhaus-filter\n! License: https://gitlab.com/malware-filter/urlhaus-filter#license\n! Source: https://urlhaus.abuse.ch/api/"
+  },
+  "Phishing Army": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "header": ""
+  }
+}
