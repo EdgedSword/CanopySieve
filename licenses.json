@@ -23,12 +23,16 @@
     "hash": "47e399b822bf7fe68a083f00108125940e9cc05ef730c0e14eb685d29b0f0c72",
     "header": "! Checksum: 5NnDJyG5jbYeoA1lT3xeCg\n! Diff-Path: ../patches/9/9-s-1779526225-3600.patch\n! Title: AdGuard Spanish/Portuguese filter\n! Description: Filter list that specifically removes ads on websites in Spanish, Portuguese, and Brazilian Portuguese languages.\n! TimeUpdated: 2026-05-23T08:47:41+00:00\n! Homepage: https://github.com/AdguardTeam/AdGuardFilters\n! License: https://github.com/AdguardTeam/AdguardFilters/blob/master/LICENSE\n!\n!---------------------------------------------------------------------------!\n!---------------------------------------------------------------------------!\n!-------------- Advertising networks ---------------------------------------!\n!---------------------------------------------------------------------------!\n!\n! This section contains the list of third-party advertising networks domains.\n! Note, that we only put rules that block full domains here and not URL parts (there's `general_url.txt` for that). Also, it must be domains that are used in a third-party context.\n!\n! Good: ||doubleclick.net^$third-party\n! Bad: /banner.jpg (should be in general_url.txt)\n! Bad: ||adssubdomain.legitwebsite.com^ (should be in adservers_firstparty.txt)\n!\n!\n! https://forum.adguard.com/index.php?threads/ivoox-com-podcasts-issues.29530/\n! ||addevweb.com^$third-party\n!"
   },
-  "URLhaus Malware": {
-    "hash": "32d4f8904b8bc3f81ec8b0a659780ddeec0301ef74dcfbd73c3d0ee2894aae3a",
-    "header": "! Title: Online Malicious URL Blocklist\n! Updated: 2026-05-24T00:20:11Z\n! Homepage: https://gitlab.com/malware-filter/urlhaus-filter\n! License: https://gitlab.com/malware-filter/urlhaus-filter#license\n! Source: https://urlhaus.abuse.ch/api/"
-  },
   "Phishing Army": {
     "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "header": ""
+  },
+  "AdGuard Social Media": {
+    "hash": "2a38f5e0565b756d9bcbb3faf9e6b77ae2049af430ef9925a15390d4493dbde1",
+    "header": "! Checksum: hs0ODag+jhAp2fE1r3nRWw\n! Diff-Path: ../patches/4/4-s-1779468800-3600.patch\n! Title: AdGuard Social Media filter\n! Description: Filter for social media widgets such as 'Like' and 'Share' buttons and more.\n! TimeUpdated: 2026-05-22T16:50:04+00:00\n! Homepage: https://github.com/AdguardTeam/AdGuardFilters\n! License: https://github.com/AdguardTeam/AdguardFilters/blob/master/LICENSE\n!\n!-------------------------------------------------------------------------------!\n!-------------- Common social trackers -----------------------------------------!\n!-------------------------------------------------------------------------------!\n!\n! This section contains rules for common trackers/buttons\n!\n! This section contains the list of the rules for common trackers/buttons.\n!\n! Good: ||example.org^$third-party (if it's social tracker)\n! Bad:  @@||example.org^$stealth (should be in AdGuard Base - allowlist_stealth.txt)\n!\n!"
+  },
+  "URLhaus Malware": {
+    "hash": "0a6a08298ecce8bc833da925e97b3b877da79a25278084b6c46ef36096e077fe",
+    "header": "! Title: Online Malicious URL Blocklist\n! Homepage: https://gitlab.com/malware-filter/urlhaus-filter\n! License: https://gitlab.com/malware-filter/urlhaus-filter#license\n! Source: https://urlhaus.abuse.ch/api/"
   }
 }
