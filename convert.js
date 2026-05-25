@@ -2,17 +2,94 @@
 
 const https = require('https');
 const fs = require('fs');
+const crypto = require('crypto');
 const { URL } = require('url');
 
-const LISTS = [
-  { name: 'EasyList',          url: 'https://easylist.to/easylist/easylist.txt' },
-  { name: 'EasyPrivacy',       url: 'https://easylist.to/easylist/easyprivacy.txt' },
-  { name: "Peter Lowe's",      url: 'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0' },
-  { name: 'Fanboy Annoyances', url: 'https://easylist.to/easylist/fanboy-annoyance.txt' },
+const RED   = '\x1b[31m';
+const RESET = '\x1b[0m';
+const BOLD  = '\x1b[1m';
+
+const LICENSES_FILE = 'licenses.json';
+
+const ALL_LISTS = [
+  { name: 'EasyList',                    url: 'https://easylist.to/easylist/easylist.txt' },
+  { name: 'EasyPrivacy',                 url: 'https://easylist.to/easylist/easyprivacy.txt' },
+  { name: "Peter Lowe's",               url: 'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0' },
+  { name: 'AdGuard Tracking Protection', url: 'https://filters.adtidy.org/extension/chromium/filters/3.txt' },
+  { name: 'Fanboy Annoyances',           url: 'https://easylist.to/easylist/fanboy-annoyance.txt' },
+  { name: 'AdGuard Annoyances',          url: 'https://filters.adtidy.org/extension/chromium/filters/14.txt' },
+  { name: 'AdGuard Mobile Ads',          url: 'https://filters.adtidy.org/extension/chromium/filters/11.txt' },
+  { name: 'URLhaus Malware',             url: 'https://urlhaus-filter.pages.dev/urlhaus-filter-online.txt' },
+  { name: 'Phishing Army',               url: 'https://phishing.army/download/phishing_army_blocklist_extended.txt' },
+  { name: 'AdGuard Social Media',        url: 'https://filters.adtidy.org/extension/chromium/filters/4.txt' },
+  { name: 'Spam404',                     url: 'https://raw.githubusercontent.com/Spam404/lists/master/adblock-list.txt' },
 ];
 
-const MAX_RULES = 120_000;
-const OUTPUT_FILE = 'blocklist.json';
+const EXTENSION_1 = {
+  listNames: ['EasyList', 'EasyPrivacy', "Peter Lowe's", 'AdGuard Tracking Protection'],
+  output: 'blocklist.json',
+  ceiling: 130_000,
+  label: 'Extension 1 (primary)',
+};
+
+const EXTENSION_2 = {
+  listNames: ['Fanboy Annoyances', 'AdGuard Annoyances', 'AdGuard Mobile Ads'],
+  output: 'blocklist-annoyances.json',
+  ceiling: 120_000,
+  label: 'Extension 2 (annoyances)',
+};
+
+const EXTENSION_3 = {
+  listNames: ['URLhaus Malware', 'Phishing Army'],
+  output: 'blocklist-security.json',
+  ceiling: 140_000,
+  label: 'Extension 3 (security)',
+};
+
+const EXTENSION_4 = {
+  listNames: ['AdGuard Social Media', 'Spam404'],
+  output: 'blocklist-social.json',
+  ceiling: 100_000,
+  label: 'Extension 4 (social)',
+};
+
+const UNSUPPORTED_MODIFIERS = ['csp=', 'redirect=', 'removeparam=', 'rewrite='];
+
+// Lines that change every update and should not affect license comparison.
+const VOLATILE_PATTERNS = [
+  /last modified/i,
+  /last updated/i,
+  /^\s*!\s*updated:/i,
+  /^\s*!\s*timeupdated:/i,
+  /^\s*!\s*checksum:/i,
+  /^\s*!\s*diff-path:/i,
+  /\bexpires\b/i,
+  /^\s*!\s*\d{4}-\d{2}-\d{2}/,
+  /version:/i,
+];
+
+function extractLicenseHeader(text) {
+  const lines = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('!')) break;
+    if (VOLATILE_PATTERNS.some(p => p.test(line))) continue;
+    lines.push(line);
+  }
+  return lines.join('\n');
+}
+
+function hashString(str) {
+  return crypto.createHash('sha256').update(str).digest('hex');
+}
+
+function loadSavedLicenses() {
+  try {
+    return JSON.parse(fs.readFileSync(LICENSES_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
 
 function download(urlString) {
   return new Promise((resolve, reject) => {
@@ -41,8 +118,6 @@ function escapeRegex(str) {
   return str.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const UNSUPPORTED_MODIFIERS = ['csp=', 'redirect=', 'removeparam=', 'rewrite='];
-
 function parseList(text) {
   const networkRules = [];
   const cssRules = [];
@@ -51,28 +126,25 @@ function parseList(text) {
 
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
-
-    // Skip blank lines, comments, and header blocks
+    // Skip blank and comment lines. ABP uses '!'; hosts/plain lists use '#'.
+    // Must NOT skip '##' or '#@#' which are ABP element hiding syntax, not comments.
     if (!line || line.startsWith('!') || line.startsWith('[')) continue;
+    if (line.startsWith('#') && !line.startsWith('##') && !line.startsWith('#@#')) continue;
 
     parsed++;
 
-    // Exception/allowlist rules
     if (line.startsWith('@@')) { skipped++; continue; }
 
-    // Script injection and extended CSS — not supported by Apple's engine
     if (line.includes('##+js(') || line.includes('##:') || line.includes('#?#')) {
       skipped++;
       continue;
     }
 
-    // Cosmetic / element-hiding rules
     if (line.includes('##') && !line.includes('#@#')) {
       const sep = line.indexOf('##');
       const domainPart = line.substring(0, sep);
       const selector = line.substring(sep + 2);
 
-      // Skip extended CSS selectors
       if (/^:|\bhas\(|\bupward\(|\bmatches-css/.test(selector)) {
         skipped++;
         continue;
@@ -84,43 +156,59 @@ function parseList(text) {
           action: { type: 'css-display-none', selector },
         });
       } else {
-        const domains = domainPart
-          .split(',')
-          .map(d => d.trim())
-          .filter(d => d && !d.startsWith('~'))
-          .map(d => `*${d}`);
+        const parts = domainPart.split(',').map(d => d.trim()).filter(Boolean);
+        const ifDomains = parts.filter(d => !d.startsWith('~')).map(d => `*${d}`);
+        const unlessDomains = parts.filter(d => d.startsWith('~')).map(d => `*${d.substring(1)}`);
 
-        if (domains.length === 0) { skipped++; continue; }
+        if (ifDomains.length === 0) { skipped++; continue; }
 
-        cssRules.push({
-          trigger: { 'url-filter': '.*', 'if-domain': domains },
-          action: { type: 'css-display-none', selector },
-        });
+        const trigger = { 'url-filter': '.*', 'if-domain': ifDomains };
+        if (unlessDomains.length > 0) trigger['unless-domain'] = unlessDomains;
+
+        cssRules.push({ trigger, action: { type: 'css-display-none', selector } });
       }
       continue;
     }
 
-    // Network blocking rules
+    // ABP network rules: ||domain^ or ||domain/path^
     if (line.startsWith('||')) {
-      // Check for unsupported modifiers
       if (line.includes('$') && UNSUPPORTED_MODIFIERS.some(m => line.includes(m))) {
         skipped++;
         continue;
       }
 
-      let domain = line.substring(2);
-      if (domain.includes('$')) domain = domain.substring(0, domain.indexOf('$'));
-      domain = domain.replace(/[\^/]+$/, '');
+      let urlPart = line.substring(2);
+      if (urlPart.includes('$')) urlPart = urlPart.substring(0, urlPart.indexOf('$'));
+      urlPart = urlPart.replace(/\^+$/, '');
 
-      // Skip if it looks like a path or regex, not a plain domain
-      if (!domain || domain.includes('/') || domain.includes('*') ||
-          domain.includes('[') || domain.includes('(')) {
+      if (!urlPart || urlPart.includes('*') || urlPart.includes('[') || urlPart.includes('(')) {
         skipped++;
         continue;
       }
 
       networkRules.push({
+        trigger: { 'url-filter': `.*${escapeRegex(urlPart)}` },
+        action: { type: 'block' },
+      });
+      continue;
+    }
+
+    // Hosts file format: "0.0.0.0 domain.com" or "127.0.0.1 domain.com"
+    const hostsMatch = line.match(/^(?:0\.0\.0\.0|127\.0\.0\.1)\s+(\S+)$/);
+    if (hostsMatch) {
+      const domain = hostsMatch[1];
+      if (!domain.includes('.') || domain === 'localhost') { skipped++; continue; }
+      networkRules.push({
         trigger: { 'url-filter': `.*${escapeRegex(domain)}` },
+        action: { type: 'block' },
+      });
+      continue;
+    }
+
+    // Plain domain list format (one domain per line, e.g. Phishing Army)
+    if (/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9-]{1,63})+$/.test(line)) {
+      networkRules.push({
+        trigger: { 'url-filter': `.*${escapeRegex(line)}` },
         action: { type: 'block' },
       });
       continue;
@@ -147,78 +235,147 @@ function bar(count, max, width = 20) {
   return '[' + '▓'.repeat(filled) + '░'.repeat(width - filled) + ']';
 }
 
-async function main() {
-  const results = [];
+function buildOutput(listResults, listNames, ceiling, outputFile, overflowIn = []) {
+  const selected = listResults.filter(r => listNames.includes(r.list.name));
+  // Own rules first, overflow fills remaining capacity and is deduped against own rules.
+  const combined = [...selected.flatMap(r => [...r.networkRules, ...r.cssRules]), ...overflowIn];
+  const beforeDedup = combined.length;
+  const deduped = deduplicate(combined);
+  const duplicatesRemoved = beforeDedup - deduped.length;
 
-  for (const list of LISTS) {
+  const ceilingHit = deduped.length > ceiling;
+  const final = ceilingHit ? deduped.slice(0, ceiling) : deduped;
+  const overflowOut = ceilingHit ? deduped.slice(ceiling) : [];
+
+  fs.writeFileSync(outputFile, JSON.stringify(final, null, 2));
+
+  return {
+    total: final.length,
+    overflowIn: overflowIn.length,
+    overflowOut,
+    networkRules: selected.reduce((n, r) => n + r.networkRules.length, 0),
+    cssRules: selected.reduce((n, r) => n + r.cssRules.length, 0),
+    skipped: selected.reduce((n, r) => n + r.skipped, 0),
+    duplicatesRemoved,
+    ceilingHit,
+    ceiling,
+    outputFile,
+  };
+}
+
+async function main() {
+  const savedLicenses = loadSavedLicenses();
+  const currentLicenses = {};
+  const licenseChanges = [];
+  const listResults = [];
+
+  console.log('Downloading source lists...\n');
+
+  for (const list of ALL_LISTS) {
     try {
       process.stdout.write(`  Downloading ${list.name}...`);
       const text = await download(list.url);
       const kb = (Buffer.byteLength(text, 'utf8') / 1024).toFixed(0);
       process.stdout.write(` ${kb} KB\n`);
+
+      const header = extractLicenseHeader(text);
+      const hash = hashString(header);
+      currentLicenses[list.name] = { hash, header };
+
+      if (savedLicenses[list.name]) {
+        if (savedLicenses[list.name].hash !== hash) {
+          licenseChanges.push(list.name);
+        }
+      }
+
       const { networkRules, cssRules, parsed, skipped } = parseList(text);
-      results.push({ list, networkRules, cssRules, parsed, converted: networkRules.length + cssRules.length, skipped, failed: false });
+      listResults.push({ list, networkRules, cssRules, parsed, converted: networkRules.length + cssRules.length, skipped, failed: false });
     } catch (err) {
       process.stdout.write('\n');
       console.error(`  ✗ ${list.name} — ${err.message}`);
-      results.push({ list, networkRules: [], cssRules: [], parsed: 0, converted: 0, skipped: 0, failed: true });
+      listResults.push({ list, networkRules: [], cssRules: [], parsed: 0, converted: 0, skipped: 0, failed: true });
     }
   }
 
-  if (results.every(r => r.failed)) {
-    console.error('All lists failed. Aborting.');
+  if (licenseChanges.length > 0) {
+    console.log('');
+    console.log(`${RED}${BOLD}⚠ LICENSE HEADER CHANGED — review before committing:${RESET}`);
+    for (const name of licenseChanges) {
+      console.log(`${RED}  • ${name}${RESET}`);
+      const prev = savedLicenses[name]?.header ?? '(no previous record)';
+      const curr = currentLicenses[name]?.header ?? '';
+      console.log(`${RED}    Previous:${RESET}`);
+      prev.split('\n').slice(0, 8).forEach(l => console.log(`${RED}      ${l}${RESET}`));
+      console.log(`${RED}    Current:${RESET}`);
+      curr.split('\n').slice(0, 8).forEach(l => console.log(`${RED}      ${l}${RESET}`));
+    }
+    console.log('');
+  }
+
+  const successCount = listResults.filter(r => !r.failed).length;
+  if (successCount === 0) {
+    console.error('\nAll lists failed. Aborting.');
     process.exit(1);
   }
 
-  // Combine in priority order (EasyList first, Fanboy last — so Fanboy gets trimmed first)
-  const combined = results.flatMap(r => [...r.networkRules, ...r.cssRules]);
-  const beforeDedup = combined.length;
-  const deduped = deduplicate(combined);
-  const duplicatesRemoved = beforeDedup - deduped.length;
-
-  let final = deduped;
-  const ceilingHit = final.length > MAX_RULES;
-  if (ceilingHit) final = final.slice(0, MAX_RULES);
-
+  let ext1, ext2, ext3, ext4;
   try {
-    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(final, null, 2));
+    ext1 = buildOutput(listResults, EXTENSION_1.listNames, EXTENSION_1.ceiling, EXTENSION_1.output);
+    ext2 = buildOutput(listResults, EXTENSION_2.listNames, EXTENSION_2.ceiling, EXTENSION_2.output, ext1.overflowOut);
+    ext3 = buildOutput(listResults, EXTENSION_3.listNames, EXTENSION_3.ceiling, EXTENSION_3.output);
+    ext4 = buildOutput(listResults, EXTENSION_4.listNames, EXTENSION_4.ceiling, EXTENSION_4.output, [...ext3.overflowOut, ...ext2.overflowOut]);
   } catch (err) {
-    console.error(`Failed to write ${OUTPUT_FILE}: ${err.message}`);
+    console.error(`\nFailed to write output: ${err.message}`);
     process.exit(1);
   }
 
-  const totalNetwork = results.reduce((n, r) => n + r.networkRules.length, 0);
-  const totalCSS     = results.reduce((n, r) => n + r.cssRules.length, 0);
-  const totalSkipped = results.reduce((n, r) => n + r.skipped, 0);
-  const total        = final.length;
-  const pct          = Math.round((total / MAX_RULES) * 100);
-
-  console.log('\n═'.repeat(39));
-  console.log('  Safari Blocklist Conversion Report');
-  console.log('═'.repeat(39) + '\n');
-  console.log('Source lists downloaded:');
-  for (const r of results) {
-    const mark = r.failed ? '✗' : '✓';
-    console.log(`  ${mark} ${r.list.name.padEnd(20)} — ${String(r.parsed).padStart(6)} rules parsed, ${String(r.converted).padStart(6)} converted`);
+  // Save updated license hashes only if no changes flagged (so unreviewed changes stay flagged next run)
+  const toSave = { ...savedLicenses };
+  for (const [name, data] of Object.entries(currentLicenses)) {
+    if (!licenseChanges.includes(name)) {
+      toSave[name] = data;
+    }
   }
-  console.log('\nRule breakdown:');
-  console.log(`  Network block rules    ${String(totalNetwork).padStart(6)}`);
-  console.log(`  CSS hide rules         ${String(totalCSS).padStart(6)}`);
-  console.log(`  Skipped (incompatible) ${String(totalSkipped).padStart(6)}`);
-  console.log(`  Duplicates removed     ${String(duplicatesRemoved).padStart(6)}`);
-  console.log('');
-  console.log(`  TOTAL in ${OUTPUT_FILE} ${String(total).padStart(6)} / ${MAX_RULES.toLocaleString()}`);
-  console.log('');
-  console.log(`  ${bar(total, MAX_RULES)} ${pct}% of safe ceiling`);
-  console.log('');
-  console.log(ceilingHit
-    ? 'Status: ⚠ CEILING HIT — rules trimmed'
-    : 'Status: ✓ Within safe ceiling');
-  console.log('');
-  console.log(`Output: ${OUTPUT_FILE} written successfully.`);
-  console.log('');
-  console.log('Next step: git add blocklist.json && git commit -m "Update blocklist" && git push');
-  console.log('');
+  fs.writeFileSync(LICENSES_FILE, JSON.stringify(toSave, null, 2));
+
+  function printExtReport(label, ext, results, listNames) {
+    const pct = Math.round((ext.total / ext.ceiling) * 100);
+    console.log(`\n── ${label} → ${ext.outputFile} ──`);
+    for (const r of results.filter(r => listNames.includes(r.list.name))) {
+      const mark = r.failed ? '✗' : '✓';
+      console.log(`  ${mark} ${r.list.name.padEnd(26)} — ${String(r.parsed).padStart(6)} parsed, ${String(r.converted).padStart(6)} converted`);
+    }
+    console.log(`  Network block rules    ${String(ext.networkRules).padStart(6)}`);
+    console.log(`  CSS hide rules         ${String(ext.cssRules).padStart(6)}`);
+    console.log(`  Skipped (incompatible) ${String(ext.skipped).padStart(6)}`);
+    console.log(`  Duplicates removed     ${String(ext.duplicatesRemoved).padStart(6)}`);
+    if (ext.overflowIn > 0) {
+      console.log(`  Overflow rules added   ${String(ext.overflowIn).padStart(6)}`);
+    }
+    if (ext.overflowOut.length > 0) {
+      console.log(`  Overflow rules out     ${String(ext.overflowOut.length).padStart(6)}`);
+    }
+    console.log(`  TOTAL                  ${String(ext.total).padStart(6)} / ${ext.ceiling.toLocaleString()}`);
+    console.log(`  ${bar(ext.total, ext.ceiling)} ${pct}%`);
+    console.log(ext.ceilingHit ? '  Status: ⚠ CEILING HIT — rules trimmed' : '  Status: ✓ Within safe ceiling');
+  }
+
+  console.log('\n' + '═'.repeat(50));
+  console.log('  Safari Blocklist Conversion Report');
+  console.log('═'.repeat(50));
+
+  printExtReport(EXTENSION_1.label, ext1, listResults, EXTENSION_1.listNames);
+  printExtReport(EXTENSION_2.label, ext2, listResults, EXTENSION_2.listNames);
+  printExtReport(EXTENSION_3.label, ext3, listResults, EXTENSION_3.listNames);
+  printExtReport(EXTENSION_4.label, ext4, listResults, EXTENSION_4.listNames);
+
+  const combinedTotal = ext1.total + ext2.total + ext3.total + ext4.total;
+  console.log(`\n  Combined total: ${combinedTotal.toLocaleString()} rules across all four extensions`);
+  console.log(`\nOutput: ${EXTENSION_1.output}, ${EXTENSION_2.output}, ${EXTENSION_3.output}, and ${EXTENSION_4.output} written successfully.`);
+  if (licenseChanges.length > 0) {
+    console.log(`\n${RED}${BOLD}⚠ Review license changes above before running git commit.${RESET}`);
+  }
+  console.log('\nNext step: git add blocklist.json blocklist-annoyances.json blocklist-security.json blocklist-social.json licenses.json && git commit -m "Update blocklist" && git push\n');
 }
 
 main();
